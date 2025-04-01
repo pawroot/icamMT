@@ -1,0 +1,101 @@
+#include <iostream>
+#include <vector>
+#include <string>
+#include <opencv2/opencv.hpp>
+
+class Camera {
+public:
+    std::string ip;
+    bool isRecording;
+    cv::VideoCapture stream;
+
+    Camera(std::string ipAddress) : ip(ipAddress), isRecording(false), stream(ipAddress) {}
+
+    void startRecording() {
+        isRecording = true;
+        std::cout << "Recording started on camera " << ip << std::endl;
+    }
+    
+    void stopRecording() {
+        isRecording = false;
+        std::cout << "Recording stopped on camera " << ip << std::endl;
+    }
+};
+
+class User {
+public:
+    std::string username;
+    bool isAdmin;
+    std::vector<std::string> permissions;
+
+    User(std::string uname, bool admin) : username(uname), isAdmin(admin) {}
+};
+
+class NVRSystem {
+private:
+    std::vector<Camera> cameras;
+    std::vector<User> users;
+    User* currentUser;
+public:
+    NVRSystem() {
+        users.push_back(User("admin", true)); // Admin không có mật khẩu
+        currentUser = &users[0];
+    }
+
+    void addUser(std::string username, bool isAdmin) {
+        users.push_back(User(username, isAdmin));
+        std::cout << "User " << username << " added.\n";
+    }
+
+    void setUserPermissions(std::string username, std::vector<std::string> permissions) {
+        for (auto &user : users) {
+            if (user.username == username) {
+                user.permissions = permissions;
+                std::cout << "Permissions updated for " << username << "\n";
+                return;
+            }
+        }
+        std::cout << "User not found!\n";
+    }
+
+    void addCamera(std::string ip) {
+        cameras.push_back(Camera(ip));
+    }
+
+    void displayCameras() {
+        const int rows = 4;
+        const int cols = 4;
+        const int width = 640;
+        const int height = 480;
+        
+        cv::Mat grid(rows * height, cols * width, CV_8UC3, cv::Scalar(0, 0, 0));
+        while (true) {
+            for (size_t i = 0; i < cameras.size(); i++) {
+                cv::Mat frame;
+                if (cameras[i].stream.isOpened()) {
+                    cameras[i].stream >> frame;
+                    if (!frame.empty()) {
+                        cv::resize(frame, frame, cv::Size(width, height));
+                        int x = (i % cols) * width;
+                        int y = (i / cols) * height;
+                        frame.copyTo(grid(cv::Rect(x, y, width, height)));
+                    }
+                }
+            }
+            cv::imshow("NVR System", grid);
+            if (cv::waitKey(30) >= 0) break;
+        }
+    }
+};
+
+int main() {
+    NVRSystem nvr;
+    nvr.addUser("operator", false);
+    nvr.setUserPermissions("operator", {"view"}); // User chỉ có quyền xem
+    nvr.addCamera("rtsp://192.168.1.100:554/stream");
+    nvr.addCamera("rtsp://192.168.1.101:554/stream");
+    nvr.addCamera("rtsp://192.168.1.102:554/stream");
+    nvr.addCamera("rtsp://192.168.1.103:554/stream");
+    nvr.displayCameras();
+    return 0;
+}
